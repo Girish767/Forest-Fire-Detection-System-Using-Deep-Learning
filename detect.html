@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2 style="margin-bottom: 2rem;">Fire Detection Analysis</h2>
+
+    <!-- Tabs -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; justify-content: center; flex-wrap: wrap;">
+        <button onclick="switchTab('image')" id="tab-image" class="btn"
+            style="background: var(--bg-card); border: 1px solid var(--primary);">Upload Photo</button>
+        <button onclick="switchTab('video')" id="tab-video" class="btn"
+            style="background: var(--bg-card); border: 1px solid #333;">Upload Video</button>
+    </div>
+
+    <!-- Image Upload Section -->
+    <div id="section-image" class="card">
+        <h3 style="margin-bottom: 1rem; text-align: center;">Image Analysis</h3>
+        <form method="POST" action="{{ url_for('detect') }}" enctype="multipart/form-data" id="uploadFormImage">
+            <input type="hidden" name="type" value="image">
+            <div class="upload-area" onclick="document.getElementById('fileInputImage').click()">
+                <i class="fas fa-image fa-3x" style="color: var(--text-dim); margin-bottom: 1rem;"></i>
+                <h3>Click to Upload Image</h3>
+                <p style="color: var(--text-dim);">Supports JPG, PNG</p>
+                <input type="file" name="file" id="fileInputImage" accept=".jpg,.jpeg,.png" style="display: none;">
+            </div>
+            <label
+                style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; cursor: pointer; font-size: 0.9rem;">
+                <input type="checkbox" name="email_notification" id="emailCheckImage" checked>
+                <span>Send email notification if fire detected</span>
+            </label>
+        </form>
+    </div>
+
+    <!-- Video Upload Section -->
+    <div id="section-video" class="card" style="display: none;">
+        <h3 style="margin-bottom: 1rem; text-align: center;">Video Analysis</h3>
+        <form method="POST" action="{{ url_for('detect') }}" enctype="multipart/form-data" id="uploadFormVideo">
+            <input type="hidden" name="type" value="video">
+            <div class="upload-area" onclick="document.getElementById('fileInputVideo').click()">
+                <i class="fas fa-video fa-3x" style="color: var(--text-dim); margin-bottom: 1rem;"></i>
+                <h3>Click to Upload Video</h3>
+                <p style="color: var(--text-dim);">Supports MP4, AVI</p>
+                <input type="file" name="file" id="fileInputVideo" accept=".mp4,.avi,.mov" style="display: none;">
+            </div>
+            <label
+                style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; cursor: pointer; font-size: 0.9rem;">
+                <input type="checkbox" name="email_notification" id="emailCheckVideo" checked>
+                <span>Send email notification if fire detected</span>
+            </label>
+        </form>
+    </div>
+
+    <script>
+        // EmailJS Configuration - loaded from .env via Flask
+        // Using var to prevent "already declared" errors during page content updates
+        var EMAILJS_PUBLIC_KEY = EMAILJS_PUBLIC_KEY || '{{ EMAILJS_PUBLIC_KEY }}';
+        var EMAILJS_SERVICE_ID = EMAILJS_SERVICE_ID || '{{ EMAILJS_SERVICE_ID }}';
+        var EMAILJS_TEMPLATE_ID = EMAILJS_TEMPLATE_ID || '{{ EMAILJS_TEMPLATE_ID }}';
+
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY && EMAILJS_PUBLIC_KEY !== '') {
+                try {
+                    emailjs.init(EMAILJS_PUBLIC_KEY);
+                    console.log('EmailJS initialized');
+                } catch (e) {
+                    console.error('EmailJS init error:', e);
+                }
+            }
+        });
+
+        function switchTab(tab) {
+            document.getElementById('tab-image').style.borderColor = '#333';
+            document.getElementById('tab-video').style.borderColor = '#333';
+            document.getElementById('section-image').style.display = 'none';
+            document.getElementById('section-video').style.display = 'none';
+            document.getElementById('tab-' + tab).style.borderColor = 'var(--primary)';
+            document.getElementById('section-' + tab).style.display = 'block';
+        }
+
+        // Progress bar functionality
+        function showProgress(message, isVideo) {
+            const overlay = document.createElement('div');
+            overlay.id = 'progress-overlay';
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+
+            const progressBox = document.createElement('div');
+            progressBox.style.cssText = 'background: #1a1a2e; padding: 2.5rem; border-radius: 16px; min-width: 450px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);';
+
+            const iconClass = isVideo ? 'video' : 'image';
+            progressBox.innerHTML = `
+                <i class="fas fa-${iconClass} fa-4x" style="color: #ff4757; margin-bottom: 1.5rem; animation: pulse 2s infinite;"></i>
+                <h3 id="progress-title" style="margin-bottom: 1.5rem; font-size: 1.5rem; color: #fff;">${message}</h3>
+                <div style="background: #0f0f1a; border-radius: 12px; height: 35px; overflow: hidden; margin-bottom: 1rem; position: relative;">
+                    <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff4757, #ff6b35); transition: width 0.3s ease;"></div>
+                </div>
+                <p id="progress-text" style="color: #888; font-size: 1.2rem; font-weight: 600;">0%</p>
+                <style>@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }</style>
+            `;
+
+            overlay.appendChild(progressBox);
+            document.body.appendChild(overlay);
+        }
+
+        function hideProgress() {
+            const overlay = document.getElementById('progress-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+
+        function updateProgress(percent, message) {
+            const bar = document.getElementById('progress-bar');
+            const text = document.getElementById('progress-text');
+            const title = document.getElementById('progress-title');
+            if (bar && text) {
+                bar.style.width = percent + '%';
+                text.textContent = Math.round(percent) + '%';
+            }
+            if (title && message) {
+                title.textContent = message;
+            }
+        }
+
+        // Handle video upload with progress
+        document.getElementById('fileInputVideo').addEventListener('change', function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            showProgress('Uploading Video...', true);
+
+            const formData = new FormData(document.getElementById('uploadFormVideo'));
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 50;
+                    updateProgress(percentComplete, 'Uploading Video...');
+                }
+            });
+
+            xhr.addEventListener('load', function () {
+                if (xhr.status === 200) {
+                    updateProgress(50, 'Processing Video Frames...');
+                    let progress = 50;
+                    const interval = setInterval(function () {
+                        progress += 1.5;
+                        updateProgress(progress, 'Processing Video Frames...');
+                        if (progress >= 100) {
+                            clearInterval(interval);
+                            setTimeout(function () {
+                                document.open();
+                                document.write(xhr.responseText);
+                                document.close();
+                            }, 500);
+                        }
+                    }, 100);
+                } else {
+                    hideProgress();
+                    alert('Error processing video. Please try again.');
+                }
+            });
+
+            xhr.addEventListener('error', function () {
+                hideProgress();
+                alert('Network error. Please check your connection and try again.');
+            });
+
+            xhr.addEventListener('abort', function () {
+                hideProgress();
+                alert('Upload cancelled.');
+            });
+
+            xhr.open('POST', '{{ url_for("detect") }}');
+            xhr.send(formData);
+        });
+
+        // Handle image upload with progress
+        document.getElementById('fileInputImage').addEventListener('change', function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please upload a valid image file (JPG or PNG).');
+                this.value = '';
+                return;
+            }
+
+            showProgress('Analyzing Image...', false);
+
+            // Use XHR for better progress handling
+            const formData = new FormData(document.getElementById('uploadFormImage'));
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 50;
+                    updateProgress(percentComplete, 'Uploading Image...');
+                }
+            });
+
+            xhr.addEventListener('load', function () {
+                if (xhr.status === 200) {
+                    updateProgress(50, 'Analyzing Image...');
+                    let progress = 50;
+                    const interval = setInterval(function () {
+                        progress += 10;
+                        updateProgress(progress, 'Analyzing Image...');
+                        if (progress >= 100) {
+                            clearInterval(interval);
+                            setTimeout(function () {
+                                document.open();
+                                document.write(xhr.responseText);
+                                document.close();
+                            }, 300);
+                        }
+                    }, 80);
+                } else {
+                    hideProgress();
+                    alert('Error analyzing image. Please try again.');
+                }
+            });
+
+            xhr.addEventListener('error', function () {
+                hideProgress();
+                alert('Network error. Please check your connection and try again.');
+            });
+
+            xhr.open('POST', '{{ url_for("detect") }}');
+            xhr.send(formData);
+        });
+    </script>
+
+    {% if result %}
+    <div class="card result-box">
+        <h3>Analysis Result</h3>
+        <img src="{{ url_for('static', filename='uploads/' + image) }}"
+            style="max-width: 100%; max-height: 400px; border-radius: 8px; margin: 1rem 0;" alt="Analyzed image">
+
+        <h2
+            style="color: {% if 'Fire' in result %}var(--primary){% else %}var(--success){% endif %}; font-size: 2.5rem;">
+            {{ result }}
+        </h2>
+
+        <div class="confidence-bar">
+            <div class="confidence-fill"
+                style="width: {{ confidence * 100 }}%; background: {% if 'Fire' in result %}var(--primary){% else %}var(--success){% endif %};">
+            </div>
+        </div>
+        <p style="margin-top: 0.5rem; color: var(--text-dim);">Confidence: {{ "%.2f"|format(confidence * 100) }}%</p>
+
+        {% if scores %}
+        <div style="text-align: left; margin-top: 2rem;">
+            <h4>Detailed Classification Scores</h4>
+            <table style="margin-top: 1rem;">
+                <thead>
+                    <tr>
+                        <th>Class</th>
+                        <th>Score</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label, score in scores.items() %}
+                    <tr>
+                        <td>
+                            {% if label == 'Fire' %}
+                            <span class="badge badge-fire">{{ label }}</span>
+                            {% elif label == 'Smoke' %}
+                            <span class="badge" style="background: #ff9800;">{{ label }}</span>
+                            {% else %}
+                            <span class="badge badge-normal">{{ label }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.4f"|format(score) }}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div
+                                    style="flex: 1; background: var(--bg-dark); border-radius: 4px; height: 20px; overflow: hidden;">
+                                    <div
+                                        style="width: {{ score * 100 }}%; height: 100%; background: {% if label == 'Fire' %}var(--primary){% elif label == 'Smoke' %}#ff9800{% else %}var(--success){% endif %}; transition: width 0.3s;">
+                                    </div>
+                                </div>
+                                <span style="min-width: 60px;">{{ "%.2f"|format(score * 100) }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if 'Fire' in result or 'Smoke' in result %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof emailjs !== 'undefined' && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && document.getElementById('emailCheckImage')?.checked) {
+                emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                    user_email: '{{ current_user.email }}',
+                    email: '{{ current_user.email }}',
+                    to_email: '{{ current_user.email }}',
+                    recipient: '{{ current_user.email }}',
+                    detection_type: '{{ result }}',
+                    confidence: '{{ "%.2f"|format(confidence * 100) }}',
+                    media_type: 'image',
+                    filename: '{{ image }}'
+                }).then(function (response) {
+                    console.log('Email sent!', response.status);
+                }, function (error) {
+                    console.error('Email error:', error);
+                });
+            }
+        });
+    </script>
+    {% endif %}
+    {% endif %}
+
+    {% if video_result %}
+    <div class="card result-box">
+        <h3>Video Analysis Result</h3>
+        <p>Video processed: {{ video }}</p>
+
+        {% set ns = namespace(fire_found=false, has_heavy_fire=false, has_moderate_fire=false, has_smoke=false) %}
+        {% for detection in video_result %}
+        {% if 'Fire heavy' in detection.label %}
+        {% set ns.fire_found = true %}
+        {% set ns.has_heavy_fire = true %}
+        {% elif 'Fire moderate' in detection.label or 'Fire' in detection.label %}
+        {% set ns.fire_found = true %}
+        {% set ns.has_moderate_fire = true %}
+        {% elif 'smoke' in detection.label.lower() %}
+        {% set ns.fire_found = true %}
+        {% set ns.has_smoke = true %}
+        {% endif %}
+        {% endfor %}
+
+        {% if ns.fire_found %}
+        <div class="badge badge-fire" style="font-size: 1.5rem; display: inline-block; margin: 1rem 0;">
+            <i class="fas fa-exclamation-triangle"></i>
+            {% if ns.has_heavy_fire %}
+            Heavy Fire Detected in Video
+            {% elif ns.has_moderate_fire %}
+            Moderate Fire Detected in Video
+            {% elif ns.has_smoke %}
+            Smoke Detected in Video (Fire Risk)
+            {% else %}
+            Fire Detected in Video
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="badge badge-normal" style="font-size: 1.5rem; display: inline-block; margin: 1rem 0;">
+            <i class="fas fa-check-circle"></i> No Fire Detected
+        </div>
+        {% endif %}
+
+        <div style="text-align: left; margin-top: 2rem;">
+            <h4>Frame Analysis Timeline</h4>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Frame</th>
+                            <th>Timestamp</th>
+                            <th>Result</th>
+                            <th>Confidence</th>
+                            <th>Scores (Normal / Smoke / Fire)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for detection in video_result %}
+                        <tr>
+                            <td>
+                                {% if detection.frame %}
+                                <img src="{{ url_for('static', filename='uploads/' + detection.frame) }}"
+                                    style="height: 50px; border-radius: 4px;" alt="Frame {{ loop.index }}">
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(detection.timestamp) }}s</td>
+                            <td>
+                                {% if 'Fire' in detection.label or 'Smoke' in detection.label or 'smoke' in
+                                detection.label %}
+                                <span class="badge badge-fire">{{ detection.label }}</span>
+                                {% else %}
+                                <span class="badge badge-normal">{{ detection.label }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(detection.confidence * 100) }}%</td>
+                            <td style="font-size: 0.8rem; color: var(--text-dim);">
+                                {% for label, score in detection.scores.items() %}
+                                {{ label }}: {{ "%.1f"|format(score * 100) }}%<br>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if ns.fire_found %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof emailjs !== 'undefined' && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && document.getElementById('emailCheckVideo')?.checked) {
+                emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                    user_email: '{{ current_user.email }}',
+                    email: '{{ current_user.email }}',
+                    to_email: '{{ current_user.email }}',
+                    recipient: '{{ current_user.email }}',
+                    detection_type: 'Fire detected in video',
+                    confidence: '95',
+                    media_type: 'video',
+                    filename: '{{ video }}'
+                }).then(function (response) {
+                    console.log('Email sent!', response.status);
+                }, function (error) {
+                    console.error('Email error:', error);
+                });
+            }
+        });
+    </script>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

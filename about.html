@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div style="text-align: center; margin: 4rem 0;">
+        <h1 style="font-size: 3rem; margin-bottom: 1rem;">About FireGuard AI</h1>
+        <p style="color: var(--text-dim); max-width: 700px; margin: 0 auto;">Our mission is to leverage cutting-edge
+            artificial intelligence to protect our forests, wildlife, and communities from the devastating impact of
+            wildfires.</p>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-bottom: 2rem; color: var(--primary);">The Technology</h2>
+        <p style="margin-bottom: 1.5rem; line-height: 1.6;">
+            FireGuard AI is built upon the <strong>SigLIP (Sigmoid Loss for Language Image Pre-training)</strong>
+            architecture developed by Google. Unlike traditional Convolutional Neural Networks (CNNs), SigLIP uses a
+            Vision Transformer (ViT) approach, allowing it to understand global context within an image—crucial for
+            distinguishing between smoke, clouds, and fog.
+        </p>
+        <p style="line-height: 1.6;">
+            The model processes images in patches, analyzing the relationship between different parts of the frame to
+            detect subtle visual cues of early-stage fires.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-bottom: 2rem; color: var(--primary);">The Dataset</h2>
+        <p style="margin-bottom: 1.5rem; line-height: 1.6;">
+            Our model was fine-tuned on a diverse dataset comprising thousands of images from various sources, ensuring
+            robustness across different environments and lighting conditions.
+        </p>
+
+        <h3 style="margin-bottom: 1rem;">Data Sources:</h3>
+        <ul style="list-style: none; padding: 0; color: var(--text-dim);">
+            <li style="margin-bottom: 1rem;">
+                <i class="fas fa-database" style="color: var(--secondary); margin-right: 10px;"></i>
+                <strong>FLAME Dataset:</strong> Aerial imagery of pile burns and prescribed fires.
+            </li>
+            <li style="margin-bottom: 1rem;">
+                <i class="fas fa-database" style="color: var(--secondary); margin-right: 10px;"></i>
+                <strong>DeepFire:</strong> A large-scale dataset for forest fire detection.
+            </li>
+            <li>
+                <i class="fas fa-database" style="color: var(--secondary); margin-right: 10px;"></i>
+                <strong>Custom Collection:</strong> Synthetic smoke and fire images for edge-case training.
+            </li>
+        </ul>
+    </div>
+
+{% endblock %}

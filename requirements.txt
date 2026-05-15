@@ -1,0 +1,15 @@
+transformers
+torch
+torchvision
+pillow
+opencv-python
+numpy
+accelerate
+scikit-learn
+datasets
+flask
+flask-sqlalchemy
+flask-login
+werkzeug
+sendgrid
+python-dotenv

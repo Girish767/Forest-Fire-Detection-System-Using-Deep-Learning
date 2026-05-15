@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Detection Logs</h2>
+        <div class="badge badge-normal" style="background: #333; color: white;">
+            Total Logs: {{ logs|length }}
+        </div>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
+        <table>
+            <thead>
+                <tr style="background: #1a1c24;">
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th>Result</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>#{{ log.id }}</td>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ log.filename }}</td>
+                    <td>
+                        {% if log.media_type == 'image' %}
+                        <i class="fas fa-image"></i> Image
+                        {% else %}
+                        <i class="fas fa-video"></i> Video
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if 'Fire' in log.detection_type or 'Smoke' in log.detection_type %}
+                        <span class="badge badge-fire">{{ log.detection_type }}</span>
+                        {% else %}
+                        <span class="badge badge-normal">{{ log.detection_type }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.2f"|format(log.confidence * 100) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
